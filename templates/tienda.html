@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Momo+Trust+Display&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('main.inicio') }}">Librería Yenny</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+      <div class="navbar-nav">
+        <a class="nav-link active" aria-current="page" href="{{ url_for('main.inicio') }}">Inicio</a>
+        <a class="nav-link" href="{{ url_for('tienda_bp.tienda') }}">Tienda</a>
+        <a class="nav-link" href="{{ url_for('main.about') }}">Sobre nosotros</a>
+        <a class="nav-link" href="{{ url_for('cuenta.registro') }}">Registrarse</a>
+        <a class="nav-link" href="{{ url_for('cuenta.login') }}">Iniciar sesión</a>
+
+
+      </div>
+    </div>
+  </div>
+</nav>
+    </header>
+
+    <main>
+        <div class="container mt-5">
+            <h1 class="text-center mb-5 titulo">Nuestros libros</h1>
+            
+            <div class="row g-4">
+                {% for libro in libros %}
+                <div class="col-md-4">
+                    <div class="card h-100 shadow">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ libro['nombre'] }}</h5>
+                            <h6 class="card-subtitle mb-2 text-muted">{{ libro['autor'] }}</h6>
+                            <p class="card-text">{{ libro['descripcion'] }}</p>
+                            <p class="text-primary fw-bold">{{ libro['precio'] }}$</p>
+                            <a href="{{ url_for('tienda_bp.compra') }}" class="btn btn-primary">Comprar</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>Copyright &copy; Tobias Bruckner 2025</p>
+    </footer>
+
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+</body>
+</html>
