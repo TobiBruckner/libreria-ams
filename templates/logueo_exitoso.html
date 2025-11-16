@@ -23,8 +23,12 @@
         <a class="nav-link active" aria-current="page" href="{{ url_for('main.inicio') }}">Inicio</a>
         <a class="nav-link" href="{{ url_for('tienda_bp.tienda') }}">Tienda</a>
         <a class="nav-link" href="{{ url_for('main.about') }}">Sobre nosotros</a>
+        {% if session.get('user_info') %}
+        <a class="nav-link" href="{{ url_for('cuenta.logout') }}">Cerrar sesión</a>
+        {% else %}
         <a class="nav-link" href="{{ url_for('cuenta.registro') }}">Registrarse</a>
         <a class="nav-link" href="{{ url_for('cuenta.login') }}">Iniciar sesión</a>
+        {% endif %}
 
 
       </div>
@@ -34,8 +38,30 @@
     </header>
 
     <main>
-        <h2 class="titulo">¡Logueo exitoso!</h2>
-
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card shadow">
+                        <div class="card-body">
+                            <h3 class="card-title text-center mb-4">Se inició sesión correctamente</h3>
+                            {% if user %}
+                            <div class="text-center mb-3">
+                                {% if user.picture %}
+                                <img src="{{ user.picture }}" alt="Foto de perfil" class="rounded-circle" width="96" height="96">
+                                {% endif %}
+                            </div>
+                            <ul class="list-group">
+                                <li class="list-group-item"><strong>Nombre:</strong> {{ user.name }}</li>
+                                <li class="list-group-item"><strong>Email:</strong> {{ user.email }}</li>
+                            </ul>
+                            {% else %}
+                            <div class="alert alert-info mt-3" role="alert">No se encontraron datos de usuario.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
 

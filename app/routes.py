@@ -1,28 +1,16 @@
-from flask import Blueprint, render_template, redirect, url_for, request, jsonify, g, flash, session
-from . import bcrypt
+from flask import Blueprint, render_template, redirect, url_for, request, jsonify, session, current_app
+from app import bcrypt
+from google_auth_oauthlib.flow import Flow
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+import os
 import sqlite3
 
 main = Blueprint("main", __name__)
+
 tienda_bp = Blueprint("tienda_bp", __name__)
+
 cuenta = Blueprint("cuenta", __name__)
-
-DATABASE = "libreria.db"
-
-
-
-def get_db():
-    if "db" not in g:
-        g.db = sqlite3.connect(DATABASE, timeout=10, check_same_thread=False)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA busy_timeout = 5000")
-    return g.db
-
-def close_db(exception=None):
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
 
 @main.route('/')
 def root():
@@ -38,8 +26,9 @@ def about():
 
 @tienda_bp.route("/tienda")
 def tienda():
-    db = get_db()
-    libros = db.execute("SELECT * FROM libro").fetchall()
+    conn = get_db_connection()
+    libros = conn.execute("SELECT * FROM libro").fetchall()
+    conn.close()
     return render_template('tienda.html', libros=libros)
 
 @main.errorhandler(404)
@@ -59,14 +48,16 @@ def compra():
 
 @tienda_bp.route("/api/libros", methods=["GET"])
 def get_libros():
-    db = get_db()
-    libros = db.execute("SELECT * FROM libro").fetchall()
+    conn = get_db_connection()
+    libros = conn.execute("SELECT * FROM libro").fetchall()
+    conn.close()
     return jsonify([dict(lib) for lib in libros])
 
 @tienda_bp.route("/api/libros/<int:id>", methods=["GET"])
 def get_libro(id):
-    db = get_db()
-    lib = db.execute("SELECT * FROM libro WHERE id = ?", (id,)).fetchone()
+    conn = get_db_connection()
+    lib = conn.execute("SELECT * FROM libro WHERE id = ?", (id)).fetchone()
+    conn.close()
     if lib is None:
         return jsonify({"Error": "Libro no encontrado"}), 404
     return jsonify(dict(lib))
@@ -74,84 +65,151 @@ def get_libro(id):
 @tienda_bp.route("/api/libros/<int:id>", methods=["PUT"])
 def update_libro(id):
     datos = request.get_json()
-    db = get_db()
-    db.execute("UPDATE libro SET precio = ? WHERE id = ?", (datos.get("precio"), id))
-    db.commit()
+    conn = get_db_connection()
+    conn.execute("UPDATE libro SET precio = ? WHERE id = ?", (datos.get("precio"), id))
+    conn.commit()
+    conn.close()
     return jsonify({"Mensaje": f"Libro con id {id} actualizado"})
 
 @tienda_bp.route("/api/libros", methods=["POST"])
 def add_libro():
     nuevo = request.get_json()
-    db = get_db()
-    db.execute("INSERT INTO libro (nombre, autor, descripcion, precio) VALUES (?, ?, ?, ?)",
+    conn = get_db_connection()
+    conn.execute("INSERT INTO libro (nombre, autor, descripcion, precio) VALUES (?, ?, ?, ?)",
                (nuevo.get("nombre"), nuevo.get("autor"), nuevo.get("descripcion"), nuevo.get("precio")))
     
-    db.commit()
+    conn.commit()
+    conn.close()
     return jsonify({"Mensaje": "Libro agregado exitosamente"}), 201
 
 @cuenta.route("/registro", methods=["GET", "POST"])
 def registro():
     if request.method == "POST":
-        nombre = request.form.get("nombre")
-        apellido = request.form.get("apellido")
-        mail = request.form.get("mail")
-        contraseña = request.form.get("contraseña")
-        contraseña_hash = bcrypt.generate_password_hash(contraseña).decode("utf-8")
+        nombre = (request.form.get("nombre") or "").strip()
+        apellido = (request.form.get("apellido") or "").strip()
+        mail = (request.form.get("mail") or request.form.get("correo") or "").strip()
+        contraseña = (request.form.get("contraseña") or "").strip()
 
-        db = get_db()
-        db.execute(
+        if not (nombre and apellido and mail and contraseña):
+            return render_template("registro.html", error="Completa todos los campos"), 400
+
+        conn = get_db_connection()
+        hashed = bcrypt.generate_password_hash(contraseña).decode('utf-8')
+        conn.execute(
             "INSERT INTO cliente (nombre, apellido, mail, contraseña) VALUES (?, ?, ?, ?)",
-            (nombre, apellido, mail, contraseña_hash),
+            (nombre, apellido, mail, hashed),
         )
-        db.commit()
-
-        session["cliente_id"] = db.execute(
-            "SELECT last_insert_rowid()"
-        ).fetchone()[0]
-
-        session["cliente_nombre"] = nombre
+        conn.commit()
+        conn.close()
+        session["registro_info"] = {"nombre": nombre, "apellido": apellido, "email": mail}
         return redirect(url_for("cuenta.registro_exitoso"))
     return render_template("registro.html")
 
-@cuenta.route("/registro_exitoso")
-def registro_exitoso():
-    return render_template("registro_exitoso.html")
+def _build_google_flow():
+    os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
+    client_id = current_app.config.get('GOOGLE_CLIENT_ID')
+    client_secret = current_app.config.get('GOOGLE_CLIENT_SECRET')
+    redirect_uri = url_for('cuenta.auth_callback', _external=True)
+    return Flow.from_client_config(
+        client_config={
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [redirect_uri],
+            }
+        },
+        scopes=[
+            "openid",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+        ],
+        redirect_uri=redirect_uri,
+    )
 
-
-@cuenta.route('/login', methods=['GET', 'POST'])
+@cuenta.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        mail = request.form.get('mail')
-        contraseña = request.form.get('contraseña')
-
-        db = get_db()
-        cliente = db.execute(
+    if request.method == "POST":
+        mail = (request.form.get("mail") or "").strip()
+        contraseña = (request.form.get("contraseña") or "").strip()
+        if not (mail and contraseña):
+            return render_template("login.html", error="Completa todos los campos"), 400
+        conn = get_db_connection()
+        user = conn.execute(
             "SELECT * FROM cliente WHERE mail = ?",
-            (mail,)
+            (mail,),
         ).fetchone()
-
-        if cliente and bcrypt.check_password_hash(cliente["contraseña"], contraseña):
-            session["cliente_id"] = cliente["id"]
-            session["cliente_nombre"] = cliente["nombre"]
-            return redirect(url_for("cuenta.logueo_exitoso"))
-        else:
-            flash("Email o contraseña incorrectos")
-            return render_template("login.html")
-
+        conn.close()
+        if not user:
+            return render_template("login.html", error="Credenciales inválidas"), 401
+        stored = user["contraseña"]
+        valid = False
+        try:
+            valid = bcrypt.check_password_hash(stored, contraseña)
+        except Exception:
+            valid = False
+        if not valid and stored == contraseña:
+            valid = True
+        if not valid:
+            return render_template("login.html", error="Credenciales inválidas"), 401
+        session["user_info"] = {"name": user["nombre"], "email": user["mail"]}
+        return redirect(url_for("cuenta.logueo_exitoso"))
     return render_template("login.html")
+
+@cuenta.route("/login_google")
+def login_google():
+    flow = _build_google_flow()
+    authorization_url, state = flow.authorization_url()
+    session["state"] = state
+    session["code_verifier"] = flow.code_verifier
+    print(f"OAuth redirect_uri: {flow.redirect_uri}")
+    return redirect(authorization_url)
+
+@cuenta.route("/auth/callback")
+def auth_callback():
+    if request.args.get("state") != session.get("state"):
+        return "Error: State mismatch", 400
+    flow = _build_google_flow()
+    cv = session.get("code_verifier")
+    if cv:
+        flow.code_verifier = cv
+    flow.fetch_token(authorization_response=request.url)
+    credentials = flow.credentials
+    try:
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token, google_requests.Request(), current_app.config.get('GOOGLE_CLIENT_ID')
+        )
+    except ValueError:
+        return "Error: Invalid token", 400
+    session["user_info"] = {
+        "name": id_info.get("name"),
+        "email": id_info.get("email"),
+        "picture": id_info.get("picture"),
+    }
+    return redirect(url_for("cuenta.logueo_exitoso"))
 
 @cuenta.route("/logueo_exitoso")
 def logueo_exitoso():
-    if "cliente_id" not in session:     
-        return redirect(url_for("cuenta.login"))
-
-    nombre = session.get("cliente_nombre") 
-    return render_template("logueo_exitoso.html", nombre=nombre)
+    return render_template("logueo_exitoso.html", user=session.get("user_info"))
 
 @cuenta.route("/logout")
 def logout():
-    session.clear() 
-    return redirect(url_for("cuenta.login"))
+    session.pop("user_info", None)
+    return redirect(url_for("main.inicio"))
+
+@cuenta.route("/registro_exitoso")
+def registro_exitoso():
+    return render_template("registro_exitoso.html", registro=session.get("registro_info"))
 
 
+
+def get_db_connection():
+    conn = sqlite3.connect('libreria.db', timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA busy_timeout=5000')
+    return conn
+
+def close_db(exception=None):
+    return None
 

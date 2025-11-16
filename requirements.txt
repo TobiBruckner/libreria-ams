@@ -1,3 +1,8 @@
 flask==3.0.3
 flask-bcrypt
 flask-login
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+python-dotenv
+requests

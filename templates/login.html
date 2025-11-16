@@ -24,8 +24,12 @@
         <a class="nav-link active" aria-current="page" href="{{ url_for('main.inicio') }}">Inicio</a>
         <a class="nav-link" href="{{ url_for('tienda_bp.tienda') }}">Tienda</a>
         <a class="nav-link" href="{{ url_for('main.about') }}">Sobre nosotros</a>
+        {% if session.get('user_info') %}
+        <a class="nav-link" href="{{ url_for('cuenta.logout') }}">Cerrar sesión</a>
+        {% else %}
         <a class="nav-link" href="{{ url_for('cuenta.registro') }}">Registrarse</a>
         <a class="nav-link" href="{{ url_for('cuenta.login') }}">Iniciar sesión</a>
+        {% endif %}
 
       </div>
     </div>
@@ -56,6 +60,10 @@
                                     <button type="submit" class="btn btn-primary">Iniciar sesión</button>
                                 </div>
                             </form>
+                            <hr>
+                            <div class="d-grid">
+                                <a class="btn btn-outline-danger" href="{{ url_for('cuenta.login_google') }}">Iniciar sesión con Google</a>
+                            </div>
                         </div>
                     </div>
                 </div>
