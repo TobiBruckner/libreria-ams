@@ -15,7 +15,7 @@ def inicio():
 def about():
     return render_template('about.html', nosotros="Sobre nosotros")
 
-@main.errorhandler(404)
+@main.app_errorhandler(404)
 def pagina_no_encontrada(e):
     return render_template('404.html'), 404
 
