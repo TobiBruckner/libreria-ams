@@ -19,7 +19,9 @@ def create_app():
     app.secret_key = "clave_super_secreta_123"
 
     
-    from .routes import main, tienda_bp, cuenta, close_db
+    from .routes import main
+    from .routes2 import tienda_bp, close_db
+    from .routes3 import cuenta, close_db
 
     app.register_blueprint(main)
     app.register_blueprint(tienda_bp)
